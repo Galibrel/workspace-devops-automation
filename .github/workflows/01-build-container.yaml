@@ -1,0 +1,84 @@
+name: 🚀 Java API CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  ARTIFACT_NAME: "api-${{ github.sha }}.jar"
+  IMAGE_NAME: "java-api:${{ github.sha }}"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔍 Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Start LocalStack
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+        run: |
+          docker run -d --name localstack -p 4566:4566 -p 4510-4559:4510-4559 -v /var/run/docker.sock:/var/run/docker.sock localstack/localstack
+
+      - name: ☕ Setup Java
+        uses: actions/setup-java@v2
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 📦 Build with Maven
+        run: mvn clean package -DskipTests
+
+      - name: 🧪 Run Tests
+        run: mvn test
+
+      - name: 🛠 Build Docker Image
+        run: docker build -t ${{ env.IMAGE_NAME }} .
+
+      - name: 🔐 Trivy Scan (Image)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}
+          format: table
+          exit-code: 0
+          severity: HIGH,CRITICAL
+
+      - name: Login to LocalStack ECR
+        run: aws ecr get-login-password --endpoint-url http://localhost:4566 --region sa-east-1
+
+      - name: 🔐 Docker Login to ACR
+        run: docker login --username mdcgithubactions --password-stdin localhost.localstack.cloud:4510
+
+      - name: 🏷️ Tag Docker Image
+        run: docker tag localstack-ecr-image 000000000000.dkr.ecr.sa-east-1.localhost.localstack.cloud:4566/localstack-ecr-repository
+
+      - name: 📤 Push to AWS Container Registry
+        run: docker push 000000000000.dkr.ecr.sa-east-1.localhost.localstack.cloud:4566/localstack-ecr-repository
+
+      - name: 📦 Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-api-artifact
+          path: target/*.jar
+
+  deploy-staging:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Download JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: java-api-artifact
+
+      - name: 🚀 Fake Deploy
+        run: |
+          echo "✅ Build: ${{ env.ARTIFACT_NAME }}"
+          echo "📡 Fake deploy to: https://staging.example.com"
