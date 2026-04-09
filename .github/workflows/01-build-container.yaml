@@ -51,17 +51,20 @@ jobs:
           exit-code: 0
           severity: HIGH,CRITICAL
 
-      - name: Login to LocalStack ECR
-        run: aws ecr get-login-password --endpoint-url http://localhost:4566 --region sa-east-1
+#      - name: Login to LocalStack ECR
+#        run: aws ecr get-login-password --endpoint-url http://localhost:4566 --region sa-east-1
 
-      - name: 🔐 Docker Login to ACR
-        run: docker login --username mdcgithubactions --password-stdin localhost.localstack.cloud:4510
+#      - name: 🔐 Docker Login to ACR
+#        run: docker login --username mdcgithubactions --password-stdin localhost.localstack.cloud:4510
 
-      - name: 🏷️ Tag Docker Image
-        run: docker tag localstack-ecr-image 000000000000.dkr.ecr.sa-east-1.localhost.localstack.cloud:4566/localstack-ecr-repository
+#     - name: 🏷️ Tag Docker Image
+#       run: docker tag localstack-ecr-image 000000000000.dkr.ecr.sa-east-1.localhost.localstack.cloud:4566/localstack-ecr-repository
 
-      - name: 📤 Push to AWS Container Registry
-        run: docker push 000000000000.dkr.ecr.sa-east-1.localhost.localstack.cloud:4566/localstack-ecr-repository
+      - name: Criar o ECR no LocalStack
+        run: awslocal ecr create-repository --repository-name devopsautomationgn --image-scanning-configuration scanOnPush=true
+
+      - name: 📤 Enviar para o LocalStack ECR
+        run: docker push 000000000000.dkr.ecr.sa-east-1.localhost.localstack.cloud:4566/devopsautomationgn
 
       - name: 📦 Upload Artifact
         uses: actions/upload-artifact@v4
@@ -71,7 +74,7 @@ jobs:
 
   deploy-staging:
     needs: build-and-test
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: 📥 Download JAR
         uses: actions/download-artifact@v4
